@@ -1,0 +1,6 @@
+# Dati generati dall'uso (stanno accanto allo script)
+WaterfoxUpdater.log
+Update/
+Waterfox/
+*.bak
+*.new

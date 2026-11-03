@@ -1,0 +1,45 @@
+name: Aggiorna URL, versione e SHA256
+
+# Ad ogni push dello script (o a mano) riscrive $SelfUpdateBase con l'URL raw di QUESTO repo
+# e rigenera Waterfox-Updater.version = "<$ScriptVersion>|<SHA256 dello script>".
+# Per rilasciare un aggiornamento basta alzare $ScriptVersion in Waterfox-Updater.ps1 e fare push.
+on:
+  push:
+    branches: [main]
+    paths: ['Waterfox-Updater.ps1']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Riscrivi URL, versione e SHA256
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, re
+          url = "https://raw.githubusercontent.com/%s/%s" % (os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF_NAME"])
+          p = "Waterfox-Updater.ps1"
+          s = open(p, "rb").read().decode("utf-8")          # il BOM resta come carattere U+FEFF
+          s, n = re.subn(r"(?m)^\$SelfUpdateBase\s*=.*$", lambda m: "$SelfUpdateBase  = '" + url + "'", s)
+          assert n == 1, "riga $SelfUpdateBase non trovata"
+          open(p, "wb").write(s.encode("utf-8"))
+          ver = re.search(r"(?m)^\$ScriptVersion\s*=\s*'([\d.]+)'", s).group(1)
+          sha = hashlib.sha256(open(p, "rb").read()).hexdigest().upper()
+          open("Waterfox-Updater.version", "w", newline="").write(ver + "|" + sha)
+          print("versione", ver, "sha256", sha)
+          PY
+
+      - name: Commit se cambia qualcosa
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Waterfox-Updater.ps1 Waterfox-Updater.version
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: aggiorna URL, versione e SHA256 [skip ci]"
+            git push
+          fi
